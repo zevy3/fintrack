@@ -11,3 +11,14 @@ export const formatDate = (iso: string) =>
 
 export const monthLabel = (month: string) =>
   new Date(`${month}-01`).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+
+/** Текущий месяц в формате YYYY-MM (по локальному времени). */
+export function currentMonth(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+export const todayIso = () => {
+  const now = new Date()
+  return `${currentMonth()}-${String(now.getDate()).padStart(2, '0')}`
+}
