@@ -41,18 +41,34 @@ npm run build    # проверка типов и production-сборка
 
 На этапе ЛР1 данные демонстрационные (`frontend/src/data/demo.ts`), backend не требуется.
 
-## Структура frontend (ЛР1)
+## Архитектура frontend (ЛР3)
+
+Код организован по упрощённой Feature-Sliced Design: слои `app → pages → features → entities → shared`,
+каждый слой импортирует только нижележащие.
 
 ```
 frontend/src/
-  components/   Layout (шапка, меню), PageHeader, StatCard
-  pages/        по одной странице на экран
-  data/         демонстрационные данные
-  utils/        форматирование денег и дат
-  types.ts      типы предметной области
+  app/        провайдеры (React Query, тема, уведомления, роутер), маршруты, layout, тема MUI
+  pages/      страницы: dashboard, transactions, categories, budgets, reports, not-found
+  features/   пользовательские действия: transaction-form, transaction-delete, category-manage,
+              budget-manage, report-export
+  entities/   предметные сущности: transaction, category, budget, report
+              (model/types, model/queries, api, ui)
+  shared/     api (ошибки, mock-режим), config, lib (форматирование, скачивание), ui (общие компоненты)
 ```
 
-UI-библиотека — [MUI](https://mui.com): единая тема (`src/theme.ts`), адаптивное меню (постоянное на ширине от 900 px, выдвижное на узких экранах).
+- **Типизация.** Все данные описаны TypeScript-типами в `entities/*/model/types.ts`; форма типов совпадает с ответами backend.
+- **Состояние.** Серверные данные — TanStack Query (кэш, перезагрузка после изменений); формы — React Hook Form.
+- **Клиентская валидация.** Схемы [zod](https://zod.dev) в формах операции, категории и бюджета: обязательные поля,
+  положительная сумма не более чем с двумя знаками после запятой, длина комментария; серверные ошибки показываются в форме.
+- **Состояния данных.** Компонент `shared/ui/LoadState` единообразно показывает загрузку, ошибку (с кнопкой «Повторить»),
+  пустой список и данные.
+- **Анимации.** Плавное появление страниц (`Fade`), карточек (`Grow`), анимация индикаторов бюджета и полос отчёта.
+- **Уведомления.** Snackbar об успешных и неудачных действиях.
+- **Mock-режим (ЛР3).** До подключения backend данные отдаёт `shared/api/mock-db.ts` с задержкой.
+  Состояния можно проверить параметрами адреса: `?mock=error` (ошибка сервера), `?mock=empty` (нет данных), `?mock=slow` (долгая загрузка).
+
+Скриншоты: `01–05` — основные экраны, `10-loading`, `11-form-validation`, `12-after-add`, `13-error`, `14-empty`, `15-404`, `16-mobile`.
 
 ## Backend (ЛР2)
 
