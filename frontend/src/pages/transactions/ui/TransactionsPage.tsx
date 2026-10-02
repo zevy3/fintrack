@@ -1,11 +1,6 @@
 import { useState } from 'react'
 import {
   Button,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   IconButton,
   MenuItem,
   Paper,
@@ -15,35 +10,36 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
-import DeleteIcon from '@mui/icons-material/Delete'
-import { PageHeader } from '../components/PageHeader'
-import { demoCategories, demoTransactions } from '../data/demo'
-import type { Kind, Transaction } from '../types'
-import { formatDate, formatMoney } from '../utils/format'
+import EditIcon from '@mui/icons-material/Edit'
+import { CategoryChip, useCategories } from '../../../entities/category'
+import { Amount, useTransactions, type Transaction } from '../../../entities/transaction'
+import { DeleteTransactionButton } from '../../../features/transaction-delete'
+import { TransactionFormDialog } from '../../../features/transaction-form'
+import type { Kind } from '../../../shared/api/types'
+import { formatDate } from '../../../shared/lib/format'
+import { LoadState, PageHeader } from '../../../shared/ui'
+
+const PAGE_SIZE = 10
 
 export function TransactionsPage() {
-  const [items, setItems] = useState<Transaction[]>(demoTransactions)
-  const [open, setOpen] = useState(false)
-  const [kind, setKind] = useState<Kind>('expense')
-  const [amount, setAmount] = useState('')
-  const [date, setDate] = useState('2026-10-06')
+  const [kind, setKind] = useState<Kind | ''>('')
   const [categoryId, setCategoryId] = useState<number | ''>('')
-  const [note, setNote] = useState('')
+  const [page, setPage] = useState(0)
+  const [dialog, setDialog] = useState<{ open: boolean; item?: Transaction }>({ open: false })
 
-  const categoryName = (id: number) => demoCategories.find((c) => c.id === id)?.name ?? '—'
-  const categories = demoCategories.filter((c) => c.kind === kind)
-
-  const save = () => {
-    if (!amount || categoryId === '') return
-    setItems([{ id: Date.now(), kind, amount: Number(amount), date, categoryId, note }, ...items])
-    setOpen(false)
-    setAmount('')
-    setNote('')
-  }
+  const { data: categories = [] } = useCategories()
+  const query = useTransactions({
+    kind: kind || undefined,
+    category_id: categoryId || undefined,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  })
+  const category = (id: number) => categories.find((c) => c.id === id)
 
   return (
     <>
@@ -51,72 +47,96 @@ export function TransactionsPage() {
         title="Операции"
         subtitle="Доходы и расходы"
         action={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ open: true })}>
             Добавить операцию
           </Button>
         }
       />
-      <TableContainer component={Paper} variant="outlined">
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Дата</TableCell>
-              <TableCell>Категория</TableCell>
-              <TableCell>Комментарий</TableCell>
-              <TableCell align="right">Сумма</TableCell>
-              <TableCell />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {items.map((t) => (
-              <TableRow key={t.id} hover>
-                <TableCell>{formatDate(t.date)}</TableCell>
-                <TableCell>
-                  <Chip size="small" label={categoryName(t.categoryId)} color={t.kind === 'income' ? 'success' : 'default'} />
-                </TableCell>
-                <TableCell>{t.note}</TableCell>
-                <TableCell align="right" sx={{ color: t.kind === 'income' ? 'success.main' : 'error.main', fontWeight: 600 }}>
-                  {t.kind === 'income' ? '+' : '−'}
-                  {formatMoney(t.amount)}
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton aria-label="Удалить" onClick={() => setItems(items.filter((i) => i.id !== t.id))}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+        <TextField
+          select
+          size="small"
+          label="Тип"
+          value={kind}
+          onChange={(e) => { setKind(e.target.value as Kind | ''); setCategoryId(''); setPage(0) }}
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="">Все</MenuItem>
+          <MenuItem value="income">Доходы</MenuItem>
+          <MenuItem value="expense">Расходы</MenuItem>
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Категория"
+          value={categoryId}
+          onChange={(e) => { setCategoryId(e.target.value === '' ? '' : Number(e.target.value)); setPage(0) }}
+          sx={{ minWidth: 220 }}
+        >
+          <MenuItem value="">Все</MenuItem>
+          {categories
+            .filter((c) => !kind || c.kind === kind)
+            .map((c) => (
+              <MenuItem key={c.id} value={c.id}>
+                {c.name}
+              </MenuItem>
             ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        </TextField>
+      </Stack>
 
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Новая операция</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField select label="Тип" value={kind} onChange={(e) => { setKind(e.target.value as Kind); setCategoryId('') }}>
-              <MenuItem value="expense">Расход</MenuItem>
-              <MenuItem value="income">Доход</MenuItem>
-            </TextField>
-            <TextField label="Сумма, ₽" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <TextField label="Дата" type="date" value={date} onChange={(e) => setDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField select label="Категория" value={categoryId} onChange={(e) => setCategoryId(Number(e.target.value))}>
-              {categories.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField label="Комментарий" value={note} onChange={(e) => setNote(e.target.value)} />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpen(false)}>Отмена</Button>
-          <Button variant="contained" onClick={save}>
-            Сохранить
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <LoadState
+        isLoading={query.isLoading}
+        error={query.error}
+        isEmpty={query.data?.total === 0}
+        emptyText="Операций не найдено. Измените фильтры или добавьте новую операцию."
+        onRetry={() => query.refetch()}
+      >
+        <TableContainer component={Paper} variant="outlined" sx={{ opacity: query.isPlaceholderData ? 0.6 : 1, transition: 'opacity .2s' }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Дата</TableCell>
+                <TableCell>Категория</TableCell>
+                <TableCell>Комментарий</TableCell>
+                <TableCell align="right">Сумма</TableCell>
+                <TableCell />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {query.data?.items.map((t) => {
+                const c = category(t.category_id)
+                return (
+                  <TableRow key={t.id} hover>
+                    <TableCell>{formatDate(t.date)}</TableCell>
+                    <TableCell>{c ? <CategoryChip name={c.name} kind={c.kind} /> : '—'}</TableCell>
+                    <TableCell>{t.note}</TableCell>
+                    <TableCell align="right">
+                      <Amount kind={t.kind} value={t.amount} />
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      <IconButton aria-label="Редактировать операцию" onClick={() => setDialog({ open: true, item: t })}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <DeleteTransactionButton id={t.id} />
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+          <TablePagination
+            component="div"
+            count={query.data?.total ?? 0}
+            page={page}
+            onPageChange={(_, p) => setPage(p)}
+            rowsPerPage={PAGE_SIZE}
+            rowsPerPageOptions={[PAGE_SIZE]}
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} из ${count}`}
+          />
+        </TableContainer>
+      </LoadState>
+
+      <TransactionFormDialog open={dialog.open} transaction={dialog.item} onClose={() => setDialog({ open: false })} />
     </>
   )
 }

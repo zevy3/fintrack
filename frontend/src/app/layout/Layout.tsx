@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   AppBar,
   Box,
   Container,
   Drawer,
+  Fade,
   IconButton,
   List,
   ListItemButton,
@@ -36,6 +37,7 @@ export function Layout() {
   const theme = useTheme()
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'))
   const [open, setOpen] = useState(false)
+  const location = useLocation()
 
   const menu = (
     <List sx={{ pt: 2 }}>
@@ -83,7 +85,11 @@ export function Layout() {
       <Box component="main" sx={{ flexGrow: 1, minWidth: 0 }}>
         <Toolbar />
         <Container maxWidth="lg" sx={{ py: 3 }}>
-          <Outlet />
+          <Fade in key={location.pathname} timeout={350}>
+            <div>
+              <Outlet />
+            </div>
+          </Fade>
         </Container>
       </Box>
     </Box>

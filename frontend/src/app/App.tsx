@@ -1,11 +1,11 @@
 import { Route, Routes } from 'react-router-dom'
-import { Layout } from './components/Layout'
-import { BudgetsPage } from './pages/BudgetsPage'
-import { CategoriesPage } from './pages/CategoriesPage'
-import { DashboardPage } from './pages/DashboardPage'
-import { NotFoundPage } from './pages/NotFoundPage'
-import { ReportsPage } from './pages/ReportsPage'
-import { TransactionsPage } from './pages/TransactionsPage'
+import { BudgetsPage } from '../pages/budgets'
+import { CategoriesPage } from '../pages/categories'
+import { DashboardPage } from '../pages/dashboard'
+import { NotFoundPage } from '../pages/not-found'
+import { ReportsPage } from '../pages/reports'
+import { TransactionsPage } from '../pages/transactions'
+import { Layout } from './layout/Layout'
 
 export default function App() {
   return (

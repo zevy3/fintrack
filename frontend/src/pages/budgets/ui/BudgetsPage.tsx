@@ -1,42 +1,64 @@
-import { Card, CardContent, Grid, LinearProgress, Typography } from '@mui/material'
-import { PageHeader } from '../components/PageHeader'
-import { demoBudgets, demoCategories, demoTransactions } from '../data/demo'
-import { formatMoney, monthLabel } from '../utils/format'
+import { useState } from 'react'
+import { Box, Button, Card, CardContent, Grid, Grow, IconButton, Stack, Typography } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import EditIcon from '@mui/icons-material/Edit'
+import { BudgetProgress, useBudgets, type Budget } from '../../../entities/budget'
+import { useCategories } from '../../../entities/category'
+import { BudgetFormDialog, DeleteBudgetButton } from '../../../features/budget-manage'
+import { currentMonth, monthLabel } from '../../../shared/lib/format'
+import { LoadState, MonthPicker, PageHeader } from '../../../shared/ui'
 
 export function BudgetsPage() {
+  const [month, setMonth] = useState(currentMonth())
+  const [dialog, setDialog] = useState<{ open: boolean; budget?: Budget }>({ open: false })
+  const query = useBudgets(month)
+  const { data: categories = [] } = useCategories()
+
   return (
     <>
-      <PageHeader title="Бюджеты" subtitle="Лимиты расходов по категориям" />
-      <Grid container spacing={2}>
-        {demoBudgets.map((b) => {
-          const name = demoCategories.find((c) => c.id === b.categoryId)?.name ?? '—'
-          const spent = demoTransactions
-            .filter((t) => t.kind === 'expense' && t.categoryId === b.categoryId && t.date.startsWith(b.month))
-            .reduce((s, t) => s + t.amount, 0)
-          const percent = Math.round((spent / b.limit) * 100)
-          return (
+      <PageHeader
+        title="Бюджеты"
+        subtitle={`Лимиты расходов — ${monthLabel(month)}`}
+        action={
+          <Stack direction="row" spacing={2}>
+            <MonthPicker value={month} onChange={setMonth} />
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ open: true })}>
+              Добавить бюджет
+            </Button>
+          </Stack>
+        }
+      />
+      <LoadState
+        isLoading={query.isLoading}
+        error={query.error}
+        isEmpty={query.data?.length === 0}
+        emptyText="На этот месяц бюджетов нет. Задайте лимит для категории расходов."
+        onRetry={() => query.refetch()}
+      >
+        <Grid container spacing={2}>
+          {query.data?.map((b, i) => (
             <Grid key={b.id} size={{ xs: 12, md: 6 }}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="h6">{name}</Typography>
-                  <Typography color="text.secondary" variant="body2" gutterBottom>
-                    {monthLabel(b.month)}
-                  </Typography>
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(percent, 100)}
-                    color={percent >= 100 ? 'error' : percent >= 80 ? 'warning' : 'primary'}
-                    sx={{ height: 10, borderRadius: 5, my: 1 }}
-                  />
-                  <Typography variant="body2">
-                    {formatMoney(spent)} из {formatMoney(b.limit)} ({percent}%)
-                  </Typography>
-                </CardContent>
-              </Card>
+              <Grow in timeout={400} style={{ transitionDelay: `${i * 80}ms` }}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="h6">{categories.find((c) => c.id === b.category_id)?.name ?? '—'}</Typography>
+                      <Box>
+                        <IconButton aria-label="Изменить лимит" onClick={() => setDialog({ open: true, budget: b })}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <DeleteBudgetButton id={b.id} />
+                      </Box>
+                    </Box>
+                    <BudgetProgress spent={b.spent} limit={b.limit} />
+                  </CardContent>
+                </Card>
+              </Grow>
             </Grid>
-          )
-        })}
-      </Grid>
+          ))}
+        </Grid>
+      </LoadState>
+      <BudgetFormDialog open={dialog.open} month={month} budget={dialog.budget} onClose={() => setDialog({ open: false })} />
     </>
   )
 }
