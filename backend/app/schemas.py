@@ -3,9 +3,9 @@ import datetime as dt
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, PlainSerializer, field_validator
 
-from app.models import Kind
+from app.models import Kind, Role
 
 # Деньги хранятся как Decimal, а в JSON отдаются числом.
 Money = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]
@@ -113,3 +113,48 @@ class MonthSummary(BaseModel):
     expense: Money
     balance: Money
     by_category: list[CategoryTotal]
+
+
+# --- пользователи и аутентификация ---
+class UserOut(ORMModel):
+    id: int
+    email: str
+    name: str
+    role: Role
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    password: Annotated[str, Field(min_length=8, max_length=128)]
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Имя не может быть пустым")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: str) -> str:
+        if not any(ch.isalpha() for ch in value) or not any(ch.isdigit() for ch in value):
+            raise ValueError("Пароль должен содержать буквы и цифры")
+        return value
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int = Field(description="Срок жизни access-токена, секунд")

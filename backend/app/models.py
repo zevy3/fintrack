@@ -13,12 +13,19 @@ class Kind(str, enum.Enum):
     expense = "expense"
 
 
+class Role(str, enum.Enum):
+    user = "user"
+    admin = "admin"
+
+
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[Role] = mapped_column(Enum(Role, name="role"), default=Role.user, server_default=Role.user.value)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     categories: Mapped[list["Category"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -65,3 +72,16 @@ class Budget(Base):
     amount_limit: Mapped[Decimal] = mapped_column(Numeric(12, 2))
 
     category: Mapped[Category] = relationship()
+
+
+class RefreshToken(Base):
+    """Выданные refresh-токены. Хранится идентификатор (jti), по нему токен можно отозвать."""
+
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    jti: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
