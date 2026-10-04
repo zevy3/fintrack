@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.routers import budgets, categories, reports, transactions
+from app.routers import auth, budgets, categories, reports, transactions
 from app.services.errors import ServiceError
 
 app = FastAPI(title="Личный финучёт API", version="0.1.0")
@@ -27,5 +27,5 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-for module in (categories, transactions, budgets, reports):
-    app.include_router(module.router, prefix="/api")
+for router in (auth.router, auth.admin_router, categories.router, transactions.router, budgets.router, reports.router):
+    app.include_router(router, prefix="/api")
