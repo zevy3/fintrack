@@ -13,8 +13,8 @@ def make_transaction(client, category_id, kind="expense", amount=100, day="2026-
     return response.json()
 
 
-def test_health(client):
-    assert client.get("/api/health").json() == {"status": "ok"}
+def test_health(anon):
+    assert anon.get("/api/health").json() == {"status": "ok"}
 
 
 def test_category_crud_and_duplicate(client):
