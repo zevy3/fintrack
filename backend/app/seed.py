@@ -1,4 +1,11 @@
-"""Заполнение БД демонстрационными данными: python -m app.seed"""
+"""Заполнение БД демонстрационными данными: DEMO_PASSWORD=... python -m app.seed
+
+Пароль демо-пользователя (demo@example.com) берётся из переменной окружения DEMO_PASSWORD;
+если она не задана, генерируется случайный и выводится в консоль.
+"""
+
+import os
+import secrets
 
 from datetime import date
 from decimal import Decimal
@@ -6,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from app.core.database import SessionLocal
+from app.core.security import hash_password
 from app.models import Budget, Category, Kind, Transaction, User
 
 CATEGORIES = [
@@ -32,10 +40,14 @@ BUDGETS = [("Продукты", "15000"), ("Транспорт", "4000"), ("Ра
 
 def seed() -> None:
     with SessionLocal() as db:
-        if db.scalar(select(User).where(User.email == "demo@example.com")):
-            print("Демо-данные уже есть, пропускаю")
+        password = os.environ.get("DEMO_PASSWORD") or secrets.token_urlsafe(9)
+        existing = db.scalar(select(User).where(User.email == "demo@example.com"))
+        if existing:
+            existing.password_hash = hash_password(password)
+            db.commit()
+            print(f"Демо-данные уже есть; пароль demo@example.com обновлён: {password}")
             return
-        user = User(email="demo@example.com", name="Демо-пользователь")
+        user = User(email="demo@example.com", name="Демо-пользователь", password_hash=hash_password(password))
         db.add(user)
         db.flush()
         by_name = {}
@@ -48,7 +60,7 @@ def seed() -> None:
         for cat, limit in BUDGETS:
             db.add(Budget(user_id=user.id, category_id=by_name[cat].id, month=date(2026, 10, 1), amount_limit=Decimal(limit)))
         db.commit()
-        print("Демо-данные добавлены")
+        print(f"Демо-данные добавлены. Вход: demo@example.com / {password}")
 
 
 if __name__ == "__main__":
