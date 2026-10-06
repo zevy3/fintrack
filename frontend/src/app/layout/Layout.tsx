@@ -16,6 +16,8 @@ import {
   useMediaQuery,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
+import { useAuth } from '../../entities/user'
+import { LogoutButton } from '../../features/auth'
 import MenuIcon from '@mui/icons-material/Menu'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
@@ -38,6 +40,7 @@ export function Layout() {
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'))
   const [open, setOpen] = useState(false)
   const location = useLocation()
+  const { user } = useAuth()
 
   const menu = (
     <List sx={{ pt: 2 }}>
@@ -66,9 +69,15 @@ export function Layout() {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography variant="h6" component="div" noWrap>
+          <Typography variant="h6" component="div" noWrap sx={{ flexGrow: 1 }}>
             Личный финучёт
           </Typography>
+          {isDesktop && (
+            <Typography variant="body2" sx={{ mr: 2 }}>
+              {user?.name}
+            </Typography>
+          )}
+          <LogoutButton />
         </Toolbar>
       </AppBar>
 
