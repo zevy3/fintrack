@@ -126,7 +126,7 @@ cp .env.example .env                     # впишите в DATABASE_URL сво
 
 # 3. Таблицы и демо-данные
 uv run alembic upgrade head              # создание таблиц
-uv run python -m app.seed                # демонстрационные данные (по желанию)
+DEMO_PASSWORD='ваш-пароль1' uv run python -m app.seed   # демо-пользователь demo@example.com и данные (по желанию)
 
 # 4. Сервер
 uv run uvicorn app.main:app --reload     # http://localhost:8000, документация: /docs
@@ -138,6 +138,9 @@ uv run uvicorn app.main:app --reload     # http://localhost:8000, докумен
 |---|---|---|
 | `DATABASE_URL` | строка подключения SQLAlchemy | `postgresql+psycopg://USER:PASSWORD@localhost:5432/finance_tracker` |
 | `CORS_ORIGINS` | разрешённые источники frontend (JSON-список) | `["http://localhost:5173"]` |
+| `SECRET_KEY` | секрет подписи JWT, обязателен | `openssl rand -hex 32` |
+| `ACCESS_TOKEN_MINUTES` | срок жизни access-токена | `15` |
+| `REFRESH_TOKEN_DAYS` | срок жизни refresh-токена | `7` |
 
 Файл `.env` не хранится в репозитории; образец — `backend/.env.example`.
 
@@ -147,6 +150,8 @@ uv run uvicorn app.main:app --reload     # http://localhost:8000, докумен
 
 | Метод и путь | Назначение |
 |---|---|
+| `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `GET /api/auth/me` | аутентификация (см. раздел «Аутентификация») |
+| `GET /api/admin/users` | список пользователей, только роль `admin` |
 | `GET/POST /api/categories`, `GET/PATCH/DELETE /api/categories/{id}` | категории |
 | `GET/POST /api/transactions`, `GET/PATCH/DELETE /api/transactions/{id}` | операции; фильтры `kind`, `category_id`, `date_from`, `date_to`, `limit`, `offset` |
 | `GET/POST /api/budgets?month=YYYY-MM`, `PATCH/DELETE /api/budgets/{id}` | бюджеты с расчётом потраченной суммы |
@@ -154,7 +159,9 @@ uv run uvicorn app.main:app --reload     # http://localhost:8000, докумен
 | `GET /api/reports/export?month=YYYY-MM` | выгрузка операций за месяц в CSV |
 | `GET /api/health` | проверка работоспособности |
 
-Коды ошибок: `404` — запись не найдена, `409` — конфликт (дубликат, категория занята), `422` — ошибка валидации.
+Все маршруты, кроме `/api/health`, `/api/auth/register|login|refresh|logout`, требуют заголовок `Authorization: Bearer <access>`.
+
+Коды ошибок: `401` — нет или недействительный токен, `403` — недостаточно прав, `404` — запись не найдена, `409` — конфликт (дубликат, категория занята), `422` — ошибка валидации.
 
 ### Проверка
 
@@ -165,3 +172,32 @@ uv run pytest
 
 Тесты создают таблицы в `finance_test` (строка подключения — `TEST_DATABASE_URL`), проверяют CRUD, валидацию,
 фильтры, бюджеты, отчёт и экспорт.
+
+## Аутентификация и авторизация (ЛР4)
+
+**Backend** (`app/core/security.py`, `app/services/auth.py`, `app/routers/auth.py`, `app/deps.py`):
+
+- **Пароли** хешируются Argon2id (`argon2-cffi`) с солью; в БД хранится только хеш. При входе хеш при необходимости обновляется под актуальные параметры.
+  Политика: от 8 символов, обязательны буквы и цифры. Ответы не раскрывают, существует ли e-mail.
+- **Access-токен** — JWT (HS256), живёт `ACCESS_TOKEN_MINUTES` (15 мин), передаётся в `Authorization: Bearer`.
+- **Refresh-токен** — JWT со сроком `REFRESH_TOKEN_DAYS` (7 дней); идентификатор (`jti`) хранится в таблице `refresh_tokens`.
+  Тип токена проверяется: refresh нельзя использовать как access и наоборот.
+- **Обновление** `POST /auth/refresh`: токен проверяется (подпись, срок, тип, наличие в БД, не отозван); старый токен отзывается, выдаётся новая пара
+  (ротация). Неверный, истёкший или отозванный токен → `401`. Повторное предъявление уже использованного токена
+  считается компрометацией — отзываются все refresh-токены пользователя.
+- **Выход** `POST /auth/logout` отзывает переданный refresh-токен (повторный выход безопасен).
+- **Защита маршрутов:** зависимость `get_current_user` (все данные и отчёты); **проверка прав:** данные всегда выбираются с фильтром по владельцу
+  (чужая запись → `404`), административный маршрут `/api/admin/users` требует роль `admin` (`403` для обычных пользователей).
+
+**Frontend** (`entities/user`, `features/auth`, `pages/login`, `pages/register`, `app/guards`, `shared/api/http.ts`):
+
+- Формы входа и регистрации с клиентской валидацией (e-mail, длина и состав пароля, совпадение паролей), ошибки сервера выводятся в форме.
+- Токены хранятся в `localStorage`; HTTP-клиент добавляет `Authorization` и при ответе `401` один раз обновляет пару по refresh-токену и повторяет запрос.
+  Если обновить не удалось — токены удаляются, кэш данных очищается, пользователь попадает на `/login`.
+- `RequireAuth` не пускает гостей к страницам приложения (после входа возвращает на запрошенную страницу), `PublicOnly` не показывает вход уже вошедшим.
+- Выход вызывает `/auth/logout` (отзыв refresh), очищает токены и кэш запросов и ведёт на `/login`.
+
+Скриншоты: `20–24` в `docs/screenshots`.
+
+Проверка: `uv run pytest` (в т. ч. `tests/test_auth.py`: хеширование, сроки токенов, истёкший/подделанный/отозванный токен, ротация и повторное использование,
+изоляция данных, роли).
