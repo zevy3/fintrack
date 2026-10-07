@@ -1,9 +1,9 @@
-import { mockDb } from '../../../shared/api/mock-db'
+import { http } from '../../../shared/api/http'
 import type { Category, CategoryInput } from '../model/types'
 
 export const categoryApi = {
-  list: (): Promise<Category[]> => mockDb.listCategories(),
-  create: (input: CategoryInput): Promise<Category> => mockDb.createCategory(input),
-  rename: (id: number, name: string): Promise<Category> => mockDb.updateCategory(id, name),
-  remove: (id: number): Promise<void> => mockDb.deleteCategory(id),
+  list: () => http.json<Category[]>('/categories'),
+  create: (input: CategoryInput) => http.json<Category>('/categories', { method: 'POST', body: input }),
+  rename: (id: number, name: string) => http.json<Category>(`/categories/${id}`, { method: 'PATCH', body: { name } }),
+  remove: (id: number) => http.empty(`/categories/${id}`, { method: 'DELETE' }),
 }
