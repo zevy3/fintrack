@@ -140,7 +140,10 @@ export function TransactionFormDialog({ open, onClose, transaction }: Props) {
                   label="Категория"
                   {...field}
                   error={!!fieldState.error}
-                  helperText={fieldState.error?.message}
+                  helperText={
+                    fieldState.error?.message ??
+                    (categories.some((c) => c.kind === kind) ? undefined : 'Нет категорий этого типа — создайте их в разделе «Категории»')
+                  }
                 >
                   {categories
                     .filter((c) => c.kind === kind)
