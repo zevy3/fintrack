@@ -163,7 +163,7 @@ createdb -O finance finance_test         # тестовая БД (один ра�
 uv run pytest
 ```
 
-Тесты создают таблицы в `finance_test` (строка подключения — `TEST_DATABASE_URL`), проверяют CRUD, валидацию,
+Тесты создают таблицы в `finance_test` (строка подключения — `TEST_DATABASE_URL`, по умолчанию `DATABASE_URL` из `.env` с базой `finance_test`), проверяют CRUD, валидацию,
 фильтры, бюджеты, отчёт и экспорт.
 
 ## Аутентификация и авторизация (ЛР4)

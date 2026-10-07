@@ -1,9 +1,15 @@
 import os
 
+from dotenv import dotenv_values
+
 # Тесты работают на отдельной БД; переменные должны быть заданы до импорта приложения.
-os.environ["DATABASE_URL"] = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+psycopg://finance:finance_dev@localhost:5432/finance_test"
-)
+# TEST_DATABASE_URL, иначе — DATABASE_URL из .env с именем базы finance_test.
+_url = os.environ.get("TEST_DATABASE_URL") or dotenv_values(".env").get("DATABASE_URL")
+if not _url:
+    raise RuntimeError("Задайте TEST_DATABASE_URL или DATABASE_URL в backend/.env")
+if not os.environ.get("TEST_DATABASE_URL"):
+    _url = _url.rsplit("/", 1)[0] + "/finance_test"
+os.environ["DATABASE_URL"] = _url
 os.environ["SECRET_KEY"] = "test-secret-key-for-pytest-only-0123456789abcdef"
 
 import pytest  # noqa: E402
