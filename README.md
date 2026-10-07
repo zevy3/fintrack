@@ -24,22 +24,17 @@
 | Категории | `/categories` | Категории доходов и расходов |
 | Бюджеты | `/budgets` | Лимиты и прогресс по категориям |
 | Отчёты | `/reports` | Расходы по категориям, экспорт |
+| Вход | `/login` | Аутентификация (ЛР4) |
+| Регистрация | `/register` | Создание аккаунта (ЛР4) |
 | 404 | любой другой | Страница не найдена |
 
 Скриншоты экранов лежат в [`docs/screenshots`](docs/screenshots).
 
-## Запуск frontend (ЛР1)
+### История изменений интерфейса
 
-Требуется Node.js 22+.
-
-```bash
-cd frontend
-npm install
-npm run dev      # http://localhost:5173
-npm run build    # проверка типов и production-сборка
-```
-
-На этапе ЛР1 данные демонстрационные (`frontend/src/data/demo.ts`), backend не требуется.
+- **ЛР3:** страницы переведены с демо-данных на асинхронную загрузку; добавлены формы с валидацией, фильтры и постраничный вывод операций, выбор месяца, уведомления; скриншоты `01–05` обновлены.
+- **ЛР4:** добавлены экраны входа и регистрации, в шапке — имя пользователя и «Выйти».
+- **ЛР5:** демо-данные заменены ответами backend; в ЛР1 планировавшаяся кнопка экспорта CSV (была неактивной) теперь скачивает файл. Скриншоты `30–41` сняты на реальных данных.
 
 ## Архитектура frontend (ЛР3)
 
@@ -54,7 +49,7 @@ frontend/src/
               budget-manage, report-export
   entities/   предметные сущности: transaction, category, budget, report
               (model/types, model/queries, api, ui)
-  shared/     api (ошибки, mock-режим), config, lib (форматирование, скачивание), ui (общие компоненты)
+  shared/     api (HTTP-клиент, токены, ошибки), config, lib (форматирование, скачивание), ui (общие компоненты)
 ```
 
 - **Типизация.** Все данные описаны TypeScript-типами в `entities/*/model/types.ts`; форма типов совпадает с ответами backend.
@@ -65,10 +60,8 @@ frontend/src/
   пустой список и данные.
 - **Анимации.** Плавное появление страниц (`Fade`), карточек (`Grow`), анимация индикаторов бюджета и полос отчёта.
 - **Уведомления.** Snackbar об успешных и неудачных действиях.
-- **Mock-режим (ЛР3).** До подключения backend данные отдаёт `shared/api/mock-db.ts` с задержкой.
-  Состояния можно проверить параметрами адреса: `?mock=error` (ошибка сервера), `?mock=empty` (нет данных), `?mock=slow` (долгая загрузка).
 
-Скриншоты: `01–05` — основные экраны, `10-loading`, `11-form-validation`, `12-after-add`, `13-error`, `14-empty`, `15-404`, `16-mobile`.
+Скриншоты ЛР3 (сняты на mock-данных до подключения backend): `01–05` — основные экраны, `10-loading`, `11-form-validation`, `12-after-add`, `13-error`, `14-empty`, `15-404`, `16-mobile`.
 
 ## Backend (ЛР2)
 
@@ -201,3 +194,61 @@ uv run pytest
 
 Проверка: `uv run pytest` (в т. ч. `tests/test_auth.py`: хеширование, сроки токенов, истёкший/подделанный/отозванный токен, ротация и повторное использование,
 изоляция данных, роли).
+
+## Интеграция frontend и backend (ЛР5)
+
+Демонстрационные данные удалены, все экраны работают через REST API (`entities/*/api`, общий клиент `shared/api/http.ts`).
+В dev-режиме Vite проксирует `/api` на `http://localhost:8000` (`frontend/vite.config.ts`), поэтому CORS настраивать не нужно;
+для другого адреса задайте `VITE_API_URL` (см. `frontend/.env.example`).
+
+| Экран | Запросы |
+|---|---|
+| Обзор | `GET /reports/summary`, `GET /transactions?limit=5`, `GET /categories` |
+| Операции | `GET/POST/PATCH/DELETE /transactions` (фильтры и постраничный вывод — параметры запроса), `GET /categories` |
+| Категории | `GET/POST/DELETE /categories` |
+| Бюджеты | `GET/POST/PATCH/DELETE /budgets?month=` |
+| Отчёты | `GET /reports/summary`, `GET /reports/export` (CSV скачивается как файл) |
+| Вход / регистрация | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `GET /auth/me` |
+
+Форматы запросов и ответов едины: поля в `snake_case`, суммы — числа, даты — `YYYY-MM-DD`, месяцы — `YYYY-MM`; типы TypeScript
+(`entities/*/model/types.ts`) соответствуют схемам Pydantic (`backend/app/schemas.py`). Ошибки сервера (`detail`, в том числе список ошибок валидации)
+разбираются в `http.ts` и показываются в формах, уведомлениях и блоках загрузки; обрыв связи даёт сообщение «Нет связи с сервером».
+Состояния «загрузка / ошибка / пусто» работают на реальных запросах (`shared/ui/LoadState`).
+
+Скриншоты на реальных данных: `30–41` в `docs/screenshots`.
+
+## Полный запуск проекта
+
+Требуются Node.js 22+, Python 3.12+, [uv](https://docs.astral.sh/uv/), PostgreSQL 14+.
+
+```bash
+# 1. База данных (один раз)
+createuser --pwprompt finance
+createdb -O finance finance_tracker
+
+# 2. Backend (терминал 1)
+cd backend
+cp .env.example .env                     # заполнить DATABASE_URL и SECRET_KEY (openssl rand -hex 32)
+uv run alembic upgrade head
+DEMO_PASSWORD='ваш-пароль1' uv run python -m app.seed
+uv run uvicorn app.main:app --reload     # http://localhost:8000/docs
+
+# 3. Frontend (терминал 2)
+cd frontend
+npm install
+npm run dev                              # http://localhost:5173
+```
+
+Откройте http://localhost:5173 и войдите как `demo@example.com` (пароль — значение `DEMO_PASSWORD`) либо зарегистрируйте нового пользователя.
+Демо-операции относятся к октябрю 2026 — выберите этот месяц в селекторе месяца.
+
+### Проверка
+
+```bash
+cd backend && uv run pytest              # 28 автотестов API
+cd frontend && npm run lint && npm run build
+```
+
+Ручной сценарий проверки (выполнен при сдаче ЛР5): регистрация → создание категорий → добавление 12 операций (постраничный вывод, фильтры) →
+редактирование и удаление операции → попытка удалить категорию с операциями (ошибка 409 в интерфейсе) → бюджет и превышение лимита →
+отчёт и скачивание CSV → выход → повторный вход → недоступность чужих данных и защищённых страниц без токена.
